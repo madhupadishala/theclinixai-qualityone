@@ -2,13 +2,11 @@
 
 QualityOne is TheClinixAI's integrated Quality Management and Learning platform foundation.
 
-## Sprint 0 status
+## Current status
 
-This repository is being bootstrapped with a Next.js + TypeScript application foundation, PostgreSQL/Prisma data layer, CI checks, environment contracts, and regulated-platform architecture.
+QualityOne now includes controlled QualityDocs, learning and qualification workflows, core QMS/CAPA, CAPA-driven retraining, PV competency qualification, regulated audit/e-signature foundations, and Sprint 8 enterprise reporting views.
 
-> Important: proprietary QualityOne domain logic, regulated workflow rules, and PV competency IP should only be committed after this repository is private.
-
-## Initial stack
+## Stack
 
 - Next.js (App Router)
 - React + TypeScript
@@ -24,15 +22,16 @@ This repository is being bootstrapped with a Next.js + TypeScript application fo
 - UAT
 - Production
 
-## Sprint 0 exit criteria
+## Deployment baseline
 
-- Application builds cleanly
-- Environment contract established
-- Database connectivity scaffolded
-- Multi-tenant architecture documented
-- Authentication/RBAC boundary defined
-- Audit trail design defined
-- CI pipeline active
-- DEV/UAT/PROD deployment path defined
+- Framework preset: Next.js
+- Build command: `npm run build`
+- Install command: `npm install`
+- Output directory: Next.js default
+- Node.js: 22.x preferred
+
+## Validation position
+
+QualityOne is being designed for regulated-use validation readiness. Production compliance claims require controlled infrastructure, validated intended use, approved procedures, access governance, training, testing evidence, and operational controls.
 
 Copyright © 2026 TheClinixAI. All rights reserved.
