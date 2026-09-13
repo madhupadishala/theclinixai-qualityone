@@ -5,7 +5,16 @@ import { submitAssessment } from '@/lib/qualification';
 
 export const runtime = 'nodejs';
 
-const Body = z.object({ answers: z.array(z.object({ questionId: z.string().min(1), answer: z.unknown() })).min(1) });
+const AnswerValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.union([z.string(), z.number(), z.boolean()])),
+]);
+
+const Body = z.object({
+  answers: z.array(z.object({ questionId: z.string().min(1), answer: AnswerValue })).min(1),
+});
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
