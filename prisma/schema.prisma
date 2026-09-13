@@ -47,6 +47,8 @@ enum SignatureMeaning {
   ACKNOWLEDGEMENT
   COMPLETION
   QUALIFICATION
+  QMS_APPROVAL
+  QMS_CLOSURE
 }
 
 enum QuestionType {
@@ -69,6 +71,56 @@ enum PracticalObservationStatus {
   FAILED
 }
 
+enum DeviationStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  RCA_COMPLETED
+  CAPA_IN_PROGRESS
+  EFFECTIVENESS_PENDING
+  READY_FOR_CLOSURE
+  CLOSED
+  VOID
+}
+
+enum DeviationSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum RootCauseCategory {
+  PEOPLE
+  PROCESS
+  PROCEDURE
+  TECHNOLOGY
+  TRAINING
+  MATERIAL
+  ENVIRONMENT
+  DATA
+  OTHER
+}
+
+enum CapaType {
+  CORRECTIVE
+  PREVENTIVE
+}
+
+enum CapaStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_VERIFICATION
+  EFFECTIVE
+  INEFFECTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum EffectivenessOutcome {
+  EFFECTIVE
+  PARTIALLY_EFFECTIVE
+  INEFFECTIVE
+}
+
 model Tenant {
   id            String         @id @default(cuid())
   slug          String         @unique
@@ -84,6 +136,8 @@ model Tenant {
   documents     Document[]
   curricula     Curriculum[]
   assessments   Assessment[]
+  deviations    Deviation[]
+  capAs         Capa[]
   auditEvents   AuditEvent[]
 }
 
@@ -100,16 +154,21 @@ model Organization {
 }
 
 model User {
-  id          String                @id @default(cuid())
-  email       String                @unique
-  displayName String
-  active      Boolean               @default(true)
-  createdAt   DateTime              @default(now())
-  updatedAt   DateTime              @updatedAt
-  memberships Membership[]
-  signatures  ElectronicSignature[]
-  auditEvents AuditEvent[]          @relation("AuditActor")
+  id                String                 @id @default(cuid())
+  email             String                 @unique
+  displayName       String
+  active            Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  memberships       Membership[]
+  signatures        ElectronicSignature[]
+  auditEvents       AuditEvent[]           @relation("AuditActor")
   assessedPractical PracticalObservation[] @relation("PracticalAssessor")
+  deviationOwners   Deviation[]            @relation("DeviationOwner")
+  investigators     Investigation[]        @relation("Investigator")
+  rcaAuthors        RootCauseAnalysis[]    @relation("RcaAuthor")
+  capaOwners        Capa[]                 @relation("CapaOwner")
+  effectivenessBy   EffectivenessCheck[]   @relation("EffectivenessReviewer")
 }
 
 model Department {
@@ -121,6 +180,7 @@ model Department {
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   memberships    Membership[]
+  deviations     Deviation[]
   @@unique([tenantId, organizationId, code])
   @@index([tenantId])
 }
@@ -139,23 +199,23 @@ model JobRole {
 }
 
 model Membership {
-  id              String             @id @default(cuid())
-  tenantId        String
-  userId          String
-  departmentId    String?
-  jobRoleId       String?
-  status          MembershipStatus   @default(INVITED)
-  createdAt       DateTime           @default(now())
-  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user            User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  department      Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  jobRole         JobRole?           @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
-  roleGrants      MembershipRole[]
-  assignments     TrainingAssignment[]
-  trainingRecords TrainingRecord[]
-  assessmentAttempts AssessmentAttempt[]
+  id                    String                 @id @default(cuid())
+  tenantId              String
+  userId                String
+  departmentId          String?
+  jobRoleId             String?
+  status                MembershipStatus       @default(INVITED)
+  createdAt             DateTime               @default(now())
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  department            Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobRole               JobRole?               @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  roleGrants            MembershipRole[]
+  assignments           TrainingAssignment[]
+  trainingRecords       TrainingRecord[]
+  assessmentAttempts    AssessmentAttempt[]
   practicalObservations PracticalObservation[]
-  qualifications  Qualification[]
+  qualifications        Qualification[]
   @@unique([tenantId, userId])
   @@index([tenantId, status])
 }
@@ -215,19 +275,20 @@ model AuditEvent {
 }
 
 model ElectronicSignature {
-  id              String           @id @default(cuid())
-  userId          String
-  meaning         SignatureMeaning
-  signedAt        DateTime         @default(now())
-  entityType      String
-  entityId        String
-  statement       String
-  contentHash     String
-  ipAddress       String?
-  userAgent       String?
-  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
-  trainingRecord  TrainingRecord?
-  qualification   Qualification?   @relation("QualificationSignature")
+  id               String           @id @default(cuid())
+  userId           String
+  meaning          SignatureMeaning
+  signedAt         DateTime         @default(now())
+  entityType       String
+  entityId         String
+  statement        String
+  contentHash      String
+  ipAddress        String?
+  userAgent        String?
+  user             User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  trainingRecord   TrainingRecord?
+  qualification    Qualification?   @relation("QualificationSignature")
+  deviationClosure Deviation?       @relation("DeviationClosureSignature")
   @@index([entityType, entityId])
 }
 
@@ -267,20 +328,20 @@ model DocumentVersion {
 }
 
 model Curriculum {
-  id             String               @id @default(cuid())
-  tenantId       String
-  jobRoleId      String?
-  code           String
-  title          String
-  version        Int                  @default(1)
-  active         Boolean              @default(true)
-  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  jobRole        JobRole?             @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
-  items          CurriculumItem[]
-  assignments    TrainingAssignment[]
-  assessments    Assessment[]
+  id                String               @id @default(cuid())
+  tenantId          String
+  jobRoleId         String?
+  code              String
+  title             String
+  version           Int                  @default(1)
+  active            Boolean              @default(true)
+  tenant            Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  jobRole           JobRole?             @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  items             CurriculumItem[]
+  assignments       TrainingAssignment[]
+  assessments       Assessment[]
   qualificationRule QualificationRule?
-  qualifications Qualification[]
+  qualifications    Qualification[]
   @@unique([tenantId, code, version])
 }
 
@@ -300,18 +361,18 @@ model CurriculumItem {
 }
 
 model TrainingAssignment {
-  id           String           @id @default(cuid())
-  membershipId String
-  curriculumId String
-  status       AssignmentStatus @default(ASSIGNED)
-  assignedAt   DateTime         @default(now())
-  dueAt        DateTime?
-  completedAt  DateTime?
-  score        Decimal?         @db.Decimal(5, 2)
-  membership   Membership       @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  curriculum   Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
-  records      TrainingRecord[]
-  assessmentAttempts AssessmentAttempt[]
+  id                    String                 @id @default(cuid())
+  membershipId          String
+  curriculumId          String
+  status                AssignmentStatus       @default(ASSIGNED)
+  assignedAt            DateTime               @default(now())
+  dueAt                 DateTime?
+  completedAt           DateTime?
+  score                 Decimal?               @db.Decimal(5, 2)
+  membership            Membership             @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  curriculum            Curriculum             @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  records               TrainingRecord[]
+  assessmentAttempts    AssessmentAttempt[]
   practicalObservations PracticalObservation[]
   @@index([membershipId, status])
 }
@@ -360,7 +421,7 @@ model AssessmentQuestion {
   prompt        String
   options       Json?
   correctAnswer Json
-  points        Decimal      @default(1) @db.Decimal(8,2)
+  points        Decimal      @default(1) @db.Decimal(8, 2)
   rationale     String?
   assessment    Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
   responses     AssessmentResponse[]
@@ -376,7 +437,7 @@ model AssessmentAttempt {
   status        AssessmentAttemptStatus @default(IN_PROGRESS)
   startedAt     DateTime                @default(now())
   submittedAt   DateTime?
-  score         Decimal?                @db.Decimal(5,2)
+  score         Decimal?                @db.Decimal(5, 2)
   passed        Boolean?
   assessment    Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
   assignment    TrainingAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
@@ -387,59 +448,156 @@ model AssessmentAttempt {
 }
 
 model AssessmentResponse {
-  id          String             @id @default(cuid())
-  attemptId   String
-  questionId  String
-  answer      Json
-  correct     Boolean?
-  pointsAwarded Decimal?         @db.Decimal(8,2)
-  attempt     AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question    AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  id            String             @id @default(cuid())
+  attemptId     String
+  questionId    String
+  answer        Json
+  correct       Boolean?
+  pointsAwarded Decimal?           @db.Decimal(8, 2)
+  attempt       AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question      AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
   @@unique([attemptId, questionId])
 }
 
 model PracticalObservation {
-  id           String                     @id @default(cuid())
-  assignmentId String
-  membershipId String
+  id             String                     @id @default(cuid())
+  assignmentId   String
+  membershipId   String
   assessorUserId String
   competencyCode String
-  sampleCount  Int                        @default(1)
-  qualityScore Decimal                    @db.Decimal(5,2)
-  status       PracticalObservationStatus
-  notes        String?
-  evidenceRef  String?
-  observedAt   DateTime                   @default(now())
-  assignment   TrainingAssignment         @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
-  membership   Membership                 @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  assessor     User                       @relation("PracticalAssessor", fields: [assessorUserId], references: [id], onDelete: Restrict)
+  sampleCount    Int                        @default(1)
+  qualityScore   Decimal                    @db.Decimal(5, 2)
+  status         PracticalObservationStatus
+  notes          String?
+  evidenceRef    String?
+  observedAt     DateTime                   @default(now())
+  assignment     TrainingAssignment         @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  membership     Membership                 @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  assessor       User                       @relation("PracticalAssessor", fields: [assessorUserId], references: [id], onDelete: Restrict)
   @@index([membershipId, competencyCode, observedAt])
 }
 
 model QualificationRule {
-  id                  String     @id @default(cuid())
-  curriculumId        String     @unique
-  knowledgeMinScore   Decimal?   @db.Decimal(5,2)
-  practicalMinScore   Decimal?   @db.Decimal(5,2)
-  minimumSamples      Int        @default(0)
-  requireTrainingComplete Boolean @default(true)
-  requireSmeSignoff   Boolean    @default(true)
-  validityDays        Int?
-  curriculum          Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  id                      String     @id @default(cuid())
+  curriculumId            String     @unique
+  knowledgeMinScore       Decimal?   @db.Decimal(5, 2)
+  practicalMinScore       Decimal?   @db.Decimal(5, 2)
+  minimumSamples          Int        @default(0)
+  requireTrainingComplete Boolean    @default(true)
+  requireSmeSignoff       Boolean    @default(true)
+  validityDays            Int?
+  curriculum              Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
 }
 
 model Qualification {
-  id              String              @id @default(cuid())
-  membershipId    String
-  curriculumId    String
-  status          QualificationStatus @default(NOT_STARTED)
-  qualifiedAt     DateTime?
-  validUntil      DateTime?
-  lastEvaluatedAt DateTime?
-  signoffSignatureId String?          @unique
-  evidenceSnapshot Json?
-  membership      Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  curriculum      Curriculum          @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
-  signoffSignature ElectronicSignature? @relation("QualificationSignature", fields: [signoffSignatureId], references: [id], onDelete: Restrict)
+  id                 String               @id @default(cuid())
+  membershipId       String
+  curriculumId       String
+  status             QualificationStatus  @default(NOT_STARTED)
+  qualifiedAt        DateTime?
+  validUntil         DateTime?
+  lastEvaluatedAt    DateTime?
+  signoffSignatureId String?              @unique
+  evidenceSnapshot   Json?
+  membership         Membership           @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  curriculum         Curriculum           @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  signoffSignature   ElectronicSignature? @relation("QualificationSignature", fields: [signoffSignatureId], references: [id], onDelete: Restrict)
   @@unique([membershipId, curriculumId])
+}
+
+model Deviation {
+  id                     String              @id @default(cuid())
+  tenantId               String
+  deviationNumber        String
+  title                  String
+  description            String
+  severity               DeviationSeverity
+  status                 DeviationStatus     @default(OPEN)
+  departmentId           String?
+  ownerUserId            String
+  discoveredAt           DateTime
+  dueAt                  DateTime?
+  immediateAction        String?
+  closedAt               DateTime?
+  closureSummary         String?
+  closureSignatureId     String?              @unique
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  tenant                 Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  department             Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  owner                  User                 @relation("DeviationOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  investigation          Investigation?
+  rootCauseAnalysis      RootCauseAnalysis?
+  capas                  Capa[]
+  closureSignature       ElectronicSignature? @relation("DeviationClosureSignature", fields: [closureSignatureId], references: [id], onDelete: Restrict)
+  @@unique([tenantId, deviationNumber])
+  @@index([tenantId, status, severity])
+}
+
+model Investigation {
+  id               String    @id @default(cuid())
+  deviationId      String    @unique
+  investigatorId   String
+  scope            String
+  facts            String
+  impactAssessment String?
+  evidence         Json?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deviation        Deviation @relation(fields: [deviationId], references: [id], onDelete: Restrict)
+  investigator     User      @relation("Investigator", fields: [investigatorId], references: [id], onDelete: Restrict)
+}
+
+model RootCauseAnalysis {
+  id            String            @id @default(cuid())
+  deviationId   String            @unique
+  authorUserId  String
+  category      RootCauseCategory
+  rootCause     String
+  contributing  String?
+  method        String?
+  evidence      Json?
+  completedAt   DateTime          @default(now())
+  deviation     Deviation         @relation(fields: [deviationId], references: [id], onDelete: Restrict)
+  author        User              @relation("RcaAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+}
+
+model Capa {
+  id                  String               @id @default(cuid())
+  tenantId            String
+  deviationId         String
+  capaNumber          String
+  type                CapaType
+  title               String
+  action              String
+  rationale           String?
+  ownerUserId         String
+  status              CapaStatus           @default(OPEN)
+  dueAt               DateTime?
+  completedAt         DateTime?
+  verificationSummary String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  deviation           Deviation            @relation(fields: [deviationId], references: [id], onDelete: Restrict)
+  owner               User                 @relation("CapaOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  effectivenessChecks EffectivenessCheck[]
+  @@unique([tenantId, capaNumber])
+  @@index([tenantId, status])
+  @@index([deviationId])
+}
+
+model EffectivenessCheck {
+  id             String               @id @default(cuid())
+  capaId         String
+  reviewerUserId String
+  plannedAt      DateTime?
+  performedAt    DateTime             @default(now())
+  outcome        EffectivenessOutcome
+  evidence       String
+  notes          String?
+  capa           Capa                 @relation(fields: [capaId], references: [id], onDelete: Restrict)
+  reviewer       User                 @relation("EffectivenessReviewer", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  @@index([capaId, performedAt])
 }
