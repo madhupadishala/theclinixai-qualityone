@@ -1,0 +1,31 @@
+name: QualityOne CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [develop]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        env:
+          APP_ENV: development
+          NEXT_PUBLIC_APP_NAME: TheClinixAI QualityOne
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/qualityone
+          AUTH_SECRET: ci-only-secret-value-must-be-at-least-32-characters
+        run: npm run build
