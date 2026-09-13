@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { db } from './db';
-import { appendAuditEvent } from './audit';
+import { appendAuditEvent, appendAuditEventTx } from './audit';
 import { launchRetrainingForEffectiveDocument } from './integration';
 
 type Actor = { tenantId: string; userId: string; membershipId: string };
@@ -44,16 +44,13 @@ export async function createDocument(actor: Actor, input: { documentNumber: stri
       data: { documentId: document.id, version: 1, contentHash, storageKey: input.storageKey, changeSummary: input.changeSummary ?? 'Initial version' },
     });
     const updated = await tx.document.update({ where: { id: document.id }, data: { currentVersionId: version.id } });
-    await tx.auditEvent.create({
-      data: {
-        tenantId: actor.tenantId,
-        actorUserId: actor.userId,
-        action: 'DOCUMENT_CREATED',
-        entityType: 'Document',
-        entityId: document.id,
-        after: { documentNumber: document.documentNumber, title: document.title, type: document.type, version: 1, contentHash },
-        eventHash: hashContent(`${actor.tenantId}:${actor.userId}:${document.id}:DOCUMENT_CREATED:${Date.now()}`),
-      },
+    await appendAuditEventTx(tx, {
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: 'DOCUMENT_CREATED',
+      entityType: 'Document',
+      entityId: document.id,
+      after: { documentNumber: document.documentNumber, title: document.title, type: document.type, version: 1, contentHash },
     });
     return { ...updated, currentVersion: version };
   });
@@ -82,9 +79,12 @@ export async function approveDocument(actor: Actor, documentId: string, statemen
   if (!document || document.status !== 'IN_REVIEW' || !document.currentVersion) throw new Error('INVALID_DOCUMENT_STATE');
   const review = await db.electronicSignature.findFirst({ where: { entityType: 'DocumentVersion', entityId: document.currentVersion.id, meaning: 'REVIEW' } });
   if (!review) throw new Error('REVIEW_REQUIRED');
+  if (review.userId === actor.userId) throw new Error('SEGREGATION_OF_DUTIES_REQUIRED');
+  const existingApproval = await db.electronicSignature.findFirst({ where: { entityType: 'DocumentVersion', entityId: document.currentVersion.id, meaning: 'APPROVAL' } });
+  if (existingApproval) throw new Error('ALREADY_APPROVED');
   const signature = await db.electronicSignature.create({ data: { userId: actor.userId, meaning: 'APPROVAL', entityType: 'DocumentVersion', entityId: document.currentVersion.id, statement, contentHash: document.currentVersion.contentHash } });
   const updated = await db.document.update({ where: { id: document.id }, data: { status: 'APPROVED' } });
-  await appendAuditEvent({ tenantId: actor.tenantId, actorUserId: actor.userId, action: 'DOCUMENT_APPROVED', entityType: 'Document', entityId: document.id, before: { status: 'IN_REVIEW' }, after: { status: 'APPROVED', version: document.currentVersion.version, signatureId: signature.id } });
+  await appendAuditEvent({ tenantId: actor.tenantId, actorUserId: actor.userId, action: 'DOCUMENT_APPROVED', entityType: 'Document', entityId: document.id, before: { status: 'IN_REVIEW' }, after: { status: 'APPROVED', version: document.currentVersion.version, signatureId: signature.id, reviewerUserId: review.userId, approverUserId: actor.userId } });
   return updated;
 }
 
@@ -109,7 +109,15 @@ export async function createRevision(actor: Actor, documentId: string, input: { 
     await tx.documentVersion.update({ where: { id: document.currentVersion!.id }, data: { supersededAt: new Date() } });
     const version = await tx.documentVersion.create({ data: { documentId: document.id, version: nextVersion, contentHash, storageKey: input.storageKey, changeSummary: input.changeSummary } });
     const updated = await tx.document.update({ where: { id: document.id }, data: { currentVersionId: version.id, status: 'DRAFT' } });
-    await tx.auditEvent.create({ data: { tenantId: actor.tenantId, actorUserId: actor.userId, action: 'DOCUMENT_REVISION_CREATED', entityType: 'Document', entityId: document.id, before: { version: document.currentVersion!.version, status: 'EFFECTIVE' }, after: { version: nextVersion, status: 'DRAFT', contentHash }, eventHash: hashContent(`${actor.tenantId}:${actor.userId}:${document.id}:REVISION:${nextVersion}:${Date.now()}`) } });
+    await appendAuditEventTx(tx, {
+      tenantId: actor.tenantId,
+      actorUserId: actor.userId,
+      action: 'DOCUMENT_REVISION_CREATED',
+      entityType: 'Document',
+      entityId: document.id,
+      before: { version: document.currentVersion!.version, status: 'EFFECTIVE' },
+      after: { version: nextVersion, status: 'DRAFT', contentHash },
+    });
     return { ...updated, currentVersion: version };
   });
 }
