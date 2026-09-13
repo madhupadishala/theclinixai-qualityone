@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { db } from './db';
 import { appendAuditEvent } from './audit';
+import { launchRetrainingForEffectiveDocument } from './integration';
 
 type Actor = { tenantId: string; userId: string; membershipId: string };
 
@@ -95,7 +96,8 @@ export async function makeEffective(actor: Actor, documentId: string, effectiveA
   await db.documentVersion.update({ where: { id: document.currentVersion.id }, data: { effectiveAt } });
   const updated = await db.document.update({ where: { id: document.id }, data: { status: 'EFFECTIVE' } });
   await appendAuditEvent({ tenantId: actor.tenantId, actorUserId: actor.userId, action: 'DOCUMENT_EFFECTIVE', entityType: 'Document', entityId: document.id, before: { status: 'APPROVED' }, after: { status: 'EFFECTIVE', effectiveAt: effectiveAt.toISOString(), version: document.currentVersion.version } });
-  return updated;
+  const retrainingCampaigns = await launchRetrainingForEffectiveDocument(actor, document.id);
+  return { ...updated, retrainingCampaigns };
 }
 
 export async function createRevision(actor: Actor, documentId: string, input: { storageKey: string; content: string; changeSummary: string }) {
