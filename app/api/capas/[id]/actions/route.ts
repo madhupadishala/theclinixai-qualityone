@@ -17,7 +17,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const session = await requirePermission(input.action === 'status' ? 'qms.capa.manage' : 'qms.effectiveness');
     const { id } = await context.params;
     const actor = { tenantId: session.tenantId, userId: session.userId, membershipId: session.membershipId };
-    if (input.action === 'effectiveness') await assertCapaRetrainingComplete(session.tenantId, id);
+    if (input.action === 'effectiveness' || (input.action === 'status' && ['EFFECTIVE', 'CLOSED'].includes(input.status))) {
+      await assertCapaRetrainingComplete(session.tenantId, id);
+    }
     const result = input.action === 'status'
       ? await updateCapa(actor, id, input)
       : await recordEffectiveness(actor, id, { ...input, plannedAt: input.plannedAt ? new Date(input.plannedAt) : undefined });
