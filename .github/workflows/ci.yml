@@ -20,6 +20,11 @@ jobs:
         run: npm install
       - name: Typecheck
         run: npm run typecheck
+      - name: Regulated policy tests
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/qualityone
+          AUTH_SECRET: ci-only-secret-value-must-be-at-least-32-characters
+        run: npm test
       - name: Build
         env:
           APP_ENV: development
