@@ -67,13 +67,13 @@ model Tenant {
 }
 
 model Organization {
-  id           String       @id @default(cuid())
-  tenantId     String
-  name         String
-  code         String
-  createdAt    DateTime     @default(now())
-  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  departments  Department[]
+  id          String       @id @default(cuid())
+  tenantId    String
+  name        String
+  code        String
+  createdAt   DateTime     @default(now())
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departments Department[]
   @@unique([tenantId, code])
   @@index([tenantId])
 }
@@ -91,13 +91,13 @@ model User {
 }
 
 model Department {
-  id             String         @id @default(cuid())
+  id             String       @id @default(cuid())
   tenantId       String
   organizationId String
   name           String
   code           String
-  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   memberships    Membership[]
   @@unique([tenantId, organizationId, code])
   @@index([tenantId])
@@ -117,20 +117,21 @@ model JobRole {
 }
 
 model Membership {
-  id             String            @id @default(cuid())
-  tenantId       String
-  userId         String
-  departmentId   String?
-  jobRoleId      String?
-  status         MembershipStatus  @default(INVITED)
-  createdAt      DateTime          @default(now())
-  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user           User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  department     Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  jobRole        JobRole?          @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
-  roleGrants     MembershipRole[]
-  assignments    TrainingAssignment[]
-  qualifications Qualification[]
+  id              String             @id @default(cuid())
+  tenantId        String
+  userId          String
+  departmentId    String?
+  jobRoleId       String?
+  status          MembershipStatus   @default(INVITED)
+  createdAt       DateTime           @default(now())
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  department      Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobRole         JobRole?           @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  roleGrants      MembershipRole[]
+  assignments     TrainingAssignment[]
+  trainingRecords TrainingRecord[]
+  qualifications  Qualification[]
   @@unique([tenantId, userId])
   @@index([tenantId, status])
 }
@@ -190,17 +191,18 @@ model AuditEvent {
 }
 
 model ElectronicSignature {
-  id          String           @id @default(cuid())
-  userId      String
-  meaning     SignatureMeaning
-  signedAt    DateTime         @default(now())
-  entityType  String
-  entityId    String
-  statement   String
-  contentHash String
-  ipAddress   String?
-  userAgent   String?
-  user        User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id              String           @id @default(cuid())
+  userId          String
+  meaning         SignatureMeaning
+  signedAt        DateTime         @default(now())
+  entityType      String
+  entityId        String
+  statement       String
+  contentHash     String
+  ipAddress       String?
+  userAgent       String?
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  trainingRecord  TrainingRecord?
   @@index([entityType, entityId])
 }
 
@@ -223,17 +225,19 @@ model Document {
 }
 
 model DocumentVersion {
-  id            String    @id @default(cuid())
-  documentId    String
-  version       Int
-  contentHash   String
-  storageKey    String
-  changeSummary String?
-  effectiveAt   DateTime?
-  supersededAt  DateTime?
-  createdAt     DateTime  @default(now())
-  document      Document  @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Restrict)
-  currentFor    Document? @relation("CurrentDocumentVersion")
+  id              String           @id @default(cuid())
+  documentId      String
+  version         Int
+  contentHash     String
+  storageKey      String
+  changeSummary   String?
+  effectiveAt     DateTime?
+  supersededAt    DateTime?
+  createdAt       DateTime         @default(now())
+  document        Document         @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Restrict)
+  currentFor      Document?        @relation("CurrentDocumentVersion")
+  curriculumItems CurriculumItem[]
+  trainingRecords TrainingRecord[]
   @@unique([documentId, version])
 }
 
@@ -254,14 +258,17 @@ model Curriculum {
 }
 
 model CurriculumItem {
-  id           String      @id @default(cuid())
-  curriculumId String
-  documentId   String?
-  sequence     Int
-  required     Boolean     @default(true)
-  passingScore Int?
-  curriculum   Curriculum  @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
-  document     Document?   @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  id                String           @id @default(cuid())
+  curriculumId      String
+  documentId        String?
+  documentVersionId String?
+  sequence          Int
+  required          Boolean          @default(true)
+  passingScore      Int?
+  curriculum        Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  document          Document?        @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  documentVersion   DocumentVersion? @relation(fields: [documentVersionId], references: [id], onDelete: Restrict)
+  trainingRecords   TrainingRecord[]
   @@unique([curriculumId, sequence])
 }
 
@@ -276,7 +283,26 @@ model TrainingAssignment {
   score        Decimal?         @db.Decimal(5, 2)
   membership   Membership       @relation(fields: [membershipId], references: [id], onDelete: Restrict)
   curriculum   Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  records      TrainingRecord[]
   @@index([membershipId, status])
+}
+
+model TrainingRecord {
+  id                String              @id @default(cuid())
+  assignmentId      String
+  curriculumItemId  String
+  membershipId      String
+  documentVersionId String
+  signatureId       String              @unique
+  completedAt       DateTime            @default(now())
+  evidenceHash      String
+  assignment        TrainingAssignment  @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  curriculumItem    CurriculumItem      @relation(fields: [curriculumItemId], references: [id], onDelete: Restrict)
+  membership        Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  documentVersion   DocumentVersion     @relation(fields: [documentVersionId], references: [id], onDelete: Restrict)
+  signature         ElectronicSignature @relation(fields: [signatureId], references: [id], onDelete: Restrict)
+  @@unique([assignmentId, curriculumItemId])
+  @@index([membershipId, completedAt])
 }
 
 model Qualification {
