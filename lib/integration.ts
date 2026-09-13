@@ -60,7 +60,7 @@ export async function launchRetrainingForEffectiveDocument(actor: Actor, documen
     const metadata = p.metadata as ImpactMetadata | null;
     return metadata?.documentId === documentId && metadata.fromVersionId !== document.currentVersion!.id;
   });
-  const campaigns = [];
+  const campaigns: CampaignMetadata[] = [];
   for (const plan of relevant) {
     const meta = plan.metadata as ImpactMetadata;
     const entityId = impactEntityId(meta.capaId, documentId);
@@ -87,15 +87,28 @@ export async function launchRetrainingForEffectiveDocument(actor: Actor, documen
 }
 
 export async function getCapaIntegrationStatus(tenantId: string, capaId: string) {
-  const campaigns = await db.auditEvent.findMany({ where: { tenantId, action: 'RETRAINING_CAMPAIGN_CREATED', entityType: 'CapaDocumentImpact' }, orderBy: { occurredAt: 'desc' } });
-  const relevant = campaigns.filter((c) => (c.metadata as CampaignMetadata | null)?.capaId === capaId);
+  const [plans, campaigns] = await Promise.all([
+    db.auditEvent.findMany({ where: { tenantId, action: 'QMS_IMPACT_PLANNED', entityType: 'CapaDocumentImpact' }, orderBy: { occurredAt: 'asc' } }),
+    db.auditEvent.findMany({ where: { tenantId, action: 'RETRAINING_CAMPAIGN_CREATED', entityType: 'CapaDocumentImpact' }, orderBy: { occurredAt: 'desc' } }),
+  ]);
+  const relevantPlans = plans.filter((p) => (p.metadata as ImpactMetadata | null)?.capaId === capaId);
+  const relevantCampaigns = campaigns.filter((c) => (c.metadata as CampaignMetadata | null)?.capaId === capaId);
   const details = [];
-  for (const campaign of relevant) {
-    const meta = campaign.metadata as CampaignMetadata;
-    const assignments = meta.assignmentIds.length ? await db.trainingAssignment.findMany({ where: { id: { in: meta.assignmentIds } }, select: { id: true, membershipId: true, status: true, dueAt: true, completedAt: true } }) : [];
-    details.push({ ...meta, assignments, complete: assignments.length === meta.assignmentIds.length && assignments.every((a) => a.status === 'COMPLETED') });
+  for (const plan of relevantPlans) {
+    const planned = plan.metadata as ImpactMetadata;
+    const campaignEvent = relevantCampaigns.find((c) => (c.metadata as CampaignMetadata).documentId === planned.documentId);
+    if (!campaignEvent) {
+      details.push({ ...planned, state: 'WAITING_FOR_EFFECTIVE_REVISION' as const, assignments: [], complete: false });
+      continue;
+    }
+    const meta = campaignEvent.metadata as CampaignMetadata;
+    const assignments = meta.assignmentIds.length
+      ? await db.trainingAssignment.findMany({ where: { id: { in: meta.assignmentIds } }, select: { id: true, membershipId: true, status: true, dueAt: true, completedAt: true } })
+      : [];
+    const complete = assignments.length === meta.assignmentIds.length && assignments.every((a) => a.status === 'COMPLETED');
+    details.push({ ...meta, state: complete ? 'COMPLETE' as const : 'RETRAINING_IN_PROGRESS' as const, assignments, complete });
   }
-  return { capaId, campaigns: details, complete: details.length === 0 ? true : details.every((d) => d.complete) };
+  return { capaId, impacts: details, complete: relevantPlans.length === 0 ? true : details.every((d) => d.complete) };
 }
 
 export async function assertCapaRetrainingComplete(tenantId: string, capaId: string) {
