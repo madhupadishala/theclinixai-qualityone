@@ -49,6 +49,26 @@ enum SignatureMeaning {
   QUALIFICATION
 }
 
+enum QuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SCENARIO
+}
+
+enum AssessmentAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  PASSED
+  FAILED
+}
+
+enum PracticalObservationStatus {
+  PENDING
+  PASSED
+  FAILED
+}
+
 model Tenant {
   id            String         @id @default(cuid())
   slug          String         @unique
@@ -63,6 +83,7 @@ model Tenant {
   roles         Role[]
   documents     Document[]
   curricula     Curriculum[]
+  assessments   Assessment[]
   auditEvents   AuditEvent[]
 }
 
@@ -88,6 +109,7 @@ model User {
   memberships Membership[]
   signatures  ElectronicSignature[]
   auditEvents AuditEvent[]          @relation("AuditActor")
+  assessedPractical PracticalObservation[] @relation("PracticalAssessor")
 }
 
 model Department {
@@ -131,6 +153,8 @@ model Membership {
   roleGrants      MembershipRole[]
   assignments     TrainingAssignment[]
   trainingRecords TrainingRecord[]
+  assessmentAttempts AssessmentAttempt[]
+  practicalObservations PracticalObservation[]
   qualifications  Qualification[]
   @@unique([tenantId, userId])
   @@index([tenantId, status])
@@ -203,6 +227,7 @@ model ElectronicSignature {
   userAgent       String?
   user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
   trainingRecord  TrainingRecord?
+  qualification   Qualification?   @relation("QualificationSignature")
   @@index([entityType, entityId])
 }
 
@@ -253,6 +278,8 @@ model Curriculum {
   jobRole        JobRole?             @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
   items          CurriculumItem[]
   assignments    TrainingAssignment[]
+  assessments    Assessment[]
+  qualificationRule QualificationRule?
   qualifications Qualification[]
   @@unique([tenantId, code, version])
 }
@@ -284,6 +311,8 @@ model TrainingAssignment {
   membership   Membership       @relation(fields: [membershipId], references: [id], onDelete: Restrict)
   curriculum   Curriculum       @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
   records      TrainingRecord[]
+  assessmentAttempts AssessmentAttempt[]
+  practicalObservations PracticalObservation[]
   @@index([membershipId, status])
 }
 
@@ -305,6 +334,100 @@ model TrainingRecord {
   @@index([membershipId, completedAt])
 }
 
+model Assessment {
+  id            String   @id @default(cuid())
+  tenantId      String
+  curriculumId  String
+  code          String
+  title         String
+  passingScore  Int      @default(80)
+  maxAttempts   Int      @default(3)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  curriculum    Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  questions     AssessmentQuestion[]
+  attempts      AssessmentAttempt[]
+  @@unique([tenantId, code])
+  @@index([tenantId, curriculumId])
+}
+
+model AssessmentQuestion {
+  id            String       @id @default(cuid())
+  assessmentId  String
+  sequence      Int
+  type          QuestionType
+  prompt        String
+  options       Json?
+  correctAnswer Json
+  points        Decimal      @default(1) @db.Decimal(8,2)
+  rationale     String?
+  assessment    Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  responses     AssessmentResponse[]
+  @@unique([assessmentId, sequence])
+}
+
+model AssessmentAttempt {
+  id            String                  @id @default(cuid())
+  assessmentId  String
+  assignmentId  String
+  membershipId  String
+  attemptNumber Int
+  status        AssessmentAttemptStatus @default(IN_PROGRESS)
+  startedAt     DateTime                @default(now())
+  submittedAt   DateTime?
+  score         Decimal?                @db.Decimal(5,2)
+  passed        Boolean?
+  assessment    Assessment              @relation(fields: [assessmentId], references: [id], onDelete: Restrict)
+  assignment    TrainingAssignment      @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  membership    Membership              @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  responses     AssessmentResponse[]
+  @@unique([assessmentId, membershipId, attemptNumber])
+  @@index([membershipId, assessmentId])
+}
+
+model AssessmentResponse {
+  id          String             @id @default(cuid())
+  attemptId   String
+  questionId  String
+  answer      Json
+  correct     Boolean?
+  pointsAwarded Decimal?         @db.Decimal(8,2)
+  attempt     AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question    AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  @@unique([attemptId, questionId])
+}
+
+model PracticalObservation {
+  id           String                     @id @default(cuid())
+  assignmentId String
+  membershipId String
+  assessorUserId String
+  competencyCode String
+  sampleCount  Int                        @default(1)
+  qualityScore Decimal                    @db.Decimal(5,2)
+  status       PracticalObservationStatus
+  notes        String?
+  evidenceRef  String?
+  observedAt   DateTime                   @default(now())
+  assignment   TrainingAssignment         @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  membership   Membership                 @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  assessor     User                       @relation("PracticalAssessor", fields: [assessorUserId], references: [id], onDelete: Restrict)
+  @@index([membershipId, competencyCode, observedAt])
+}
+
+model QualificationRule {
+  id                  String     @id @default(cuid())
+  curriculumId        String     @unique
+  knowledgeMinScore   Decimal?   @db.Decimal(5,2)
+  practicalMinScore   Decimal?   @db.Decimal(5,2)
+  minimumSamples      Int        @default(0)
+  requireTrainingComplete Boolean @default(true)
+  requireSmeSignoff   Boolean    @default(true)
+  validityDays        Int?
+  curriculum          Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+}
+
 model Qualification {
   id              String              @id @default(cuid())
   membershipId    String
@@ -313,7 +436,10 @@ model Qualification {
   qualifiedAt     DateTime?
   validUntil      DateTime?
   lastEvaluatedAt DateTime?
+  signoffSignatureId String?          @unique
+  evidenceSnapshot Json?
   membership      Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
   curriculum      Curriculum          @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  signoffSignature ElectronicSignature? @relation("QualificationSignature", fields: [signoffSignatureId], references: [id], onDelete: Restrict)
   @@unique([membershipId, curriculumId])
 }
