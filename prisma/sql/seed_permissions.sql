@@ -1,0 +1,39 @@
+-- QualityOne controlled SQL: baseline permission catalog
+-- Apply after the initial Prisma migration.
+-- This script is idempotent and only seeds Permission rows.
+
+INSERT INTO "Permission" ("id", "code", "description") VALUES
+  (gen_random_uuid()::text, 'documents.read', 'Read controlled documents'),
+  (gen_random_uuid()::text, 'documents.create', 'Create controlled documents'),
+  (gen_random_uuid()::text, 'documents.submit_review', 'Submit documents for review'),
+  (gen_random_uuid()::text, 'documents.review', 'Review controlled document versions'),
+  (gen_random_uuid()::text, 'documents.approve', 'Approve controlled document versions'),
+  (gen_random_uuid()::text, 'documents.make_effective', 'Make approved document versions effective'),
+  (gen_random_uuid()::text, 'documents.revise', 'Create controlled document revisions'),
+  (gen_random_uuid()::text, 'documents.retire', 'Retire controlled documents'),
+  (gen_random_uuid()::text, 'training.curricula.manage', 'Create and manage training curricula'),
+  (gen_random_uuid()::text, 'training.assign', 'Assign curricula to learners'),
+  (gen_random_uuid()::text, 'training.my.read', 'Read own training assignments'),
+  (gen_random_uuid()::text, 'training.complete', 'Complete assigned training'),
+  (gen_random_uuid()::text, 'training.compliance.read', 'Read training compliance dashboards'),
+  (gen_random_uuid()::text, 'assessments.read', 'Read assessment definitions'),
+  (gen_random_uuid()::text, 'assessments.manage', 'Create and manage assessments'),
+  (gen_random_uuid()::text, 'assessments.attempt', 'Attempt assigned assessments'),
+  (gen_random_uuid()::text, 'practical.record', 'Record practical or OJT observations'),
+  (gen_random_uuid()::text, 'qualification.read', 'Read qualification status and evidence'),
+  (gen_random_uuid()::text, 'qualification.evaluate', 'Evaluate qualification evidence'),
+  (gen_random_uuid()::text, 'qualification.signoff', 'Sign off qualifications'),
+  (gen_random_uuid()::text, 'qms.deviations.read', 'Read deviations'),
+  (gen_random_uuid()::text, 'qms.deviations.create', 'Create deviations'),
+  (gen_random_uuid()::text, 'qms.investigate', 'Record and complete investigations'),
+  (gen_random_uuid()::text, 'qms.rca', 'Record root cause analysis'),
+  (gen_random_uuid()::text, 'qms.capa.create', 'Create CAPAs'),
+  (gen_random_uuid()::text, 'qms.capa.manage', 'Manage CAPA lifecycle'),
+  (gen_random_uuid()::text, 'qms.effectiveness', 'Record CAPA effectiveness checks'),
+  (gen_random_uuid()::text, 'qms.close', 'Close deviations'),
+  (gen_random_uuid()::text, 'qms.impact.manage', 'Plan CAPA document impact and retraining'),
+  (gen_random_uuid()::text, 'pv.profile.manage', 'Configure PV competency profiles'),
+  (gen_random_uuid()::text, 'pv.evidence.record', 'Record supervised PV competency evidence'),
+  (gen_random_uuid()::text, 'pv.qualification.evaluate', 'Evaluate PV competency qualification'),
+  (gen_random_uuid()::text, 'pv.qualification.signoff', 'Sign off PV competency qualification')
+ON CONFLICT ("code") DO UPDATE SET "description" = EXCLUDED."description";
