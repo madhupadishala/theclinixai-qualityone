@@ -5,12 +5,19 @@ import { createAssessment } from '@/lib/qualification';
 
 export const runtime = 'nodejs';
 
+const AnswerValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.union([z.string(), z.number(), z.boolean()])),
+]);
+
 const Question = z.object({
   sequence: z.number().int().positive(),
   type: z.enum(['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TRUE_FALSE', 'SCENARIO']),
   prompt: z.string().min(3),
-  options: z.unknown().optional(),
-  correctAnswer: z.unknown(),
+  options: z.array(AnswerValue).optional(),
+  correctAnswer: AnswerValue,
   points: z.number().positive().optional(),
   rationale: z.string().max(1000).optional(),
 });
