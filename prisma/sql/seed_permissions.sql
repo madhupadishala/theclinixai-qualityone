@@ -35,5 +35,6 @@ INSERT INTO "Permission" ("id", "code", "description") VALUES
   (gen_random_uuid()::text, 'pv.profile.manage', 'Configure PV competency profiles'),
   (gen_random_uuid()::text, 'pv.evidence.record', 'Record supervised PV competency evidence'),
   (gen_random_uuid()::text, 'pv.qualification.evaluate', 'Evaluate PV competency qualification'),
-  (gen_random_uuid()::text, 'pv.qualification.signoff', 'Sign off PV competency qualification')
+  (gen_random_uuid()::text, 'pv.qualification.signoff', 'Sign off PV competency qualification'),
+  (gen_random_uuid()::text, 'reporting.read', 'Read enterprise dashboards and inspection evidence reports')
 ON CONFLICT ("code") DO UPDATE SET "description" = EXCLUDED."description";
