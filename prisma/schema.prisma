@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipStatus { INVITED ACTIVE SUSPENDED DEACTIVATED }
+enum DocumentStatus { DRAFT IN_REVIEW APPROVED EFFECTIVE SUPERSEDED RETIRED }
+enum AssignmentStatus { ASSIGNED IN_PROGRESS COMPLETED OVERDUE CANCELLED }
+enum QualificationStatus { NOT_STARTED IN_PROGRESS QUALIFIED AT_RISK EXPIRED SUSPENDED }
+enum SignatureMeaning { AUTHOR REVIEW APPROVAL ACKNOWLEDGEMENT COMPLETION QUALIFICATION }
+
+model Tenant {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  organizations Organization[]
+  memberships Membership[]
+  departments Department[]
+  jobRoles JobRole[]
+  roles Role[]
+  documents Document[]
+  curricula Curriculum[]
+  auditEvents AuditEvent[]
+}
+
+model Organization {
+  id String @id @default(cuid())
+  tenantId String
+  name String
+  code String
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  departments Department[]
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  displayName String
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships Membership[]
+  signatures ElectronicSignature[]
+  auditEvents AuditEvent[] @relation("AuditActor")
+}
+
+model Department {
+  id String @id @default(cuid())
+  tenantId String
+  organizationId String
+  name String
+  code String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  memberships Membership[]
+  @@unique([tenantId, organizationId, code])
+  @@index([tenantId])
+}
+
+model JobRole {
+  id String @id @default(cuid())
+  tenantId String
+  name String
+  code String
+  description String?
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  memberships Membership[]
+  curricula Curriculum[]
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model Membership {
+  id String @id @default(cuid())
+  tenantId String
+  userId String
+  departmentId String?
+  jobRoleId String?
+  status MembershipStatus @default(INVITED)
+  createdAt DateTime @default(now())
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  jobRole JobRole? @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  roleGrants MembershipRole[]
+  assignments TrainingAssignment[]
+  qualifications Qualification[]
+  @@unique([tenantId, userId])
+  @@index([tenantId, status])
+}
+
+model Role {
+  id String @id @default(cuid())
+  tenantId String
+  name String
+  code String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  grants MembershipRole[]
+  permissions RolePermission[]
+  @@unique([tenantId, code])
+}
+
+model Permission {
+  id String @id @default(cuid())
+  code String @unique
+  description String
+  roles RolePermission[]
+}
+
+model MembershipRole {
+  membershipId String
+  roleId String
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([membershipId, roleId])
+}
+
+model RolePermission {
+  roleId String
+  permissionId String
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  tenantId String
+  actorUserId String?
+  occurredAt DateTime @default(now())
+  action String
+  entityType String
+  entityId String
+  reason String?
+  before Json?
+  after Json?
+  metadata Json?
+  prevHash String?
+  eventHash String @unique
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, entityType, entityId])
+}
+
+model ElectronicSignature {
+  id String @id @default(cuid())
+  userId String
+  meaning SignatureMeaning
+  signedAt DateTime @default(now())
+  entityType String
+  entityId String
+  statement String
+  contentHash String
+  ipAddress String?
+  userAgent String?
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  @@index([entityType, entityId])
+}
+
+model Document {
+  id String @id @default(cuid())
+  tenantId String
+  documentNumber String
+  title String
+  type String
+  status DocumentStatus @default(DRAFT)
+  currentVersionId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  versions DocumentVersion[] @relation("DocumentVersions")
+  currentVersion DocumentVersion? @relation("CurrentDocumentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  curriculumItems CurriculumItem[]
+  @@unique([tenantId, documentNumber])
+  @@index([tenantId, status])
+}
+
+model DocumentVersion {
+  id String @id @default(cuid())
+  documentId String
+  version Int
+  contentHash String
+  storageKey String
+  changeSummary String?
+  effectiveAt DateTime?
+  supersededAt DateTime?
+  createdAt DateTime @default(now())
+  document Document @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Restrict)
+  currentFor Document? @relation("CurrentDocumentVersion")
+  @@unique([documentId, version])
+}
+
+model Curriculum {
+  id String @id @default(cuid())
+  tenantId String
+  jobRoleId String?
+  code String
+  title String
+  version Int @default(1)
+  active Boolean @default(true)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  jobRole JobRole? @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  items CurriculumItem[]
+  assignments TrainingAssignment[]
+  qualifications Qualification[]
+  @@unique([tenantId, code, version])
+}
+
+model CurriculumItem {
+  id String @id @default(cuid())
+  curriculumId String
+  documentId String?
+  sequence Int
+  required Boolean @default(true)
+  passingScore Int?
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  @@unique([curriculumId, sequence])
+}
+
+model TrainingAssignment {
+  id String @id @default(cuid())
+  membershipId String
+  curriculumId String
+  status AssignmentStatus @default(ASSIGNED)
+  assignedAt DateTime @default(now())
+  dueAt DateTime?
+  completedAt DateTime?
+  score Decimal? @db.Decimal(5,2)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  @@index([membershipId, status])
+}
+
+model Qualification {
+  id String @id @default(cuid())
+  membershipId String
+  curriculumId String
+  status QualificationStatus @default(NOT_STARTED)
+  qualifiedAt DateTime?
+  validUntil DateTime?
+  lastEvaluatedAt DateTime?
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Restrict)
+  @@unique([membershipId, curriculumId])
+}

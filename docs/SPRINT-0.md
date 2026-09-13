@@ -1,27 +1,29 @@
 # Sprint 0 — Foundation
 
-## Goal
+## Implemented
+- [x] Next.js + React + TypeScript application shell
+- [x] Environment validation contract
+- [x] GitHub Actions CI
+- [x] PostgreSQL + Prisma schema foundation
+- [x] Tenant and Organization models
+- [x] User, Membership, Department and JobRole models
+- [x] RBAC data model and permission checker
+- [x] Hash-chained append-oriented AuditEvent
+- [x] ElectronicSignature evidence model
+- [x] Document and immutable DocumentVersion foundation
+- [x] Curriculum, TrainingAssignment and Qualification foundations
+- [x] Health endpoint
+- [x] Deployment and security baselines documented
 
-Establish a production-oriented technical base for QualityOne without prematurely committing proprietary regulated-domain logic to a public repository.
+## Remaining before Sprint 0 exit
+- [ ] Create managed DEV PostgreSQL and apply first controlled migration
+- [ ] Connect GitHub repository to Vercel
+- [ ] Configure DEV environment variables
+- [ ] Deploy and smoke-test DEV
+- [ ] Establish UAT project/environment path
+- [ ] Add production database immutability controls for AuditEvent
+- [ ] Implement authentication provider and verified session boundary
+- [ ] Record first release/validation baseline
 
-## In progress
-
-- [x] Repository initialized
-- [x] `develop` branch created
-- [x] Next.js + TypeScript scaffold
-- [x] Environment contract
-- [x] CI build/typecheck workflow
-- [x] Architecture baseline
-- [ ] Repository visibility changed to Private
-- [ ] PostgreSQL + Prisma installed and validated
-- [ ] Core tenant/identity/RBAC schema
-- [ ] Audit event schema
-- [ ] Document/version/workflow schema
-- [ ] Learning/qualification foundation schema
-- [ ] Authentication implementation
-- [ ] Vercel DEV deployment
-- [ ] UAT deployment path
-
-## Exit criteria
-
-Sprint 0 closes only when the application builds, the regulated foundation schema is migration-ready, CI is green, and a DEV deployment is running.
+## Rule
+No patient/safety production data is permitted in DEV or UAT.
