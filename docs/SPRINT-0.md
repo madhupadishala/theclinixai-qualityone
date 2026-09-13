@@ -12,18 +12,19 @@
 - [x] ElectronicSignature evidence model
 - [x] Document and immutable DocumentVersion foundation
 - [x] Curriculum, TrainingAssignment and Qualification foundations
-- [x] Health endpoint
-- [x] Deployment and security baselines documented
+- [x] Provider-independent signed session boundary
+- [x] Server-side active-membership enforcement
+- [x] Health endpoint and unauthenticated session endpoint behavior
+- [x] Deployment, security and validation baselines documented
 
 ## Remaining before Sprint 0 exit
 - [ ] Create managed DEV PostgreSQL and apply first controlled migration
-- [ ] Connect GitHub repository to Vercel
+- [ ] Connect this repository to a new Vercel project
 - [ ] Configure DEV environment variables
 - [ ] Deploy and smoke-test DEV
-- [ ] Establish UAT project/environment path
-- [ ] Add production database immutability controls for AuditEvent
-- [ ] Implement authentication provider and verified session boundary
-- [ ] Record first release/validation baseline
+- [ ] Establish UAT path
+- [ ] Add DB-level AuditEvent update/delete prevention in controlled migration
+- [ ] Record first release baseline
 
 ## Rule
 No patient/safety production data is permitted in DEV or UAT.
